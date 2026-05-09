@@ -1,0 +1,10 @@
+# Local development dependencies
+google-cloud-aiplatform>=1.30.0
+kfp>=2.0.0
+pandas
+statsmodels
+scikit-learn
+fsspec
+gcsfs
+google-cloud-storage
+pytest

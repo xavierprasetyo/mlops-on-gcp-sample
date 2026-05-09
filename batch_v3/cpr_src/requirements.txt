@@ -1,0 +1,6 @@
+statsmodels
+pandas
+numpy
+fsspec
+gcsfs
+google-cloud-storage

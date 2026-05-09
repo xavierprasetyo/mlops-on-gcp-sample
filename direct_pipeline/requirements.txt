@@ -1,0 +1,4 @@
+google-cloud-aiplatform>=1.38.0
+kfp>=2.7.0
+pandas
+numpy

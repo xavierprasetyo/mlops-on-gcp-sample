@@ -1,0 +1,37 @@
+# ===================== Python =====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+
+# =================== Environments =================
+.venv/
+venv/
+env/
+.env
+
+# ====================== pytest ====================
+.pytest_cache/
+
+# ==================== Datasets ====================
+# Large Kaggle CSV files — keep in GCS, not in git
+dataset/
+
+# ============= Compiled KFP Pipelines =============
+*.yaml
+!**/cloudbuild.yaml
+
+# ==================== IDE / OS ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =================== Misc ========================
+*.log
