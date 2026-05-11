@@ -63,6 +63,9 @@ def training_pipeline(
     # Step 2: Hyperparameter search
     search_task = hyperparam_search(
         train_data=prep_task.outputs["train_data"],
+        project=PROJECT_ID,
+        location=LOCATION,
+        experiment_name=EXPERIMENT_NAME,
     ).set_cpu_limit("16").set_memory_limit("32G")
 
     # Step 3: Train SARIMAX with best hyperparameters
@@ -77,6 +80,9 @@ def training_pipeline(
         model_artifact=train_task.outputs["model_artifact"],
         val_data=prep_task.outputs["val_data"],
         forecast_horizon=forecast_horizon,
+        project=PROJECT_ID,
+        location=LOCATION,
+        experiment_name=EXPERIMENT_NAME,
     )
 
     # Step 5: Register to Vertex AI Model Registry (after evaluation)
@@ -88,6 +94,7 @@ def training_pipeline(
         bucket_uri=BUCKET_URI,
         target_store_nbr=target_store_nbr,
         target_family=target_family,
+        experiment_name=EXPERIMENT_NAME,
         model_artifact=train_task.outputs["model_artifact"],
     )
     register_task.after(evaluate_task)

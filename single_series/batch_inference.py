@@ -19,6 +19,7 @@ from single_series.pipeline.config import (
     PROJECT_ID,
     LOCATION,
     MODEL_DISPLAY_NAME,
+    EXPERIMENT_NAME,
     GCS_TEST_CSV,
     GCS_OIL_CSV,
     GCS_HOLIDAYS_CSV,
@@ -83,7 +84,9 @@ def prepare_batch_input(
 
 def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
     """Submit batch prediction job using the registered model."""
-    aiplatform.init(project=PROJECT_ID, location=LOCATION)
+    aiplatform.init(
+        project=PROJECT_ID, location=LOCATION, experiment=EXPERIMENT_NAME
+    )
 
     models = aiplatform.Model.list(
         filter=f'display_name="{MODEL_DISPLAY_NAME}"',
@@ -93,6 +96,20 @@ def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
         raise ValueError(f"Model '{MODEL_DISPLAY_NAME}' not found in registry.")
     model = models[0]
     print(f"Using model: {model.display_name}, version: {model.version_id}")
+
+    # Log batch inference run to Vertex AI Experiments
+    import datetime
+    run_id = f"batch-{model.version_id}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    aiplatform.start_run(run_id)
+    aiplatform.log_params({
+        "model_display_name": model.display_name,
+        "model_version": model.version_id,
+        "input_uri": input_uri,
+        "target_store_nbr": TARGET_STORE_NBR,
+        "target_family": TARGET_FAMILY,
+        "machine_type": "n2-standard-16",
+        "stage": "batch_inference",
+    })
 
     print("Submitting Vertex AI Batch Prediction Job...")
     batch_job = model.batch_predict(
@@ -110,6 +127,11 @@ def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
     print("Waiting for job resource creation...")
     batch_job.wait_for_resource_creation()
     print(f"Job created: {batch_job.resource_name}")
+
+    aiplatform.log_params({
+        "batch_job_resource": batch_job.resource_name,
+    })
+
     return batch_job
 
 
@@ -160,6 +182,18 @@ def postprocess_output(batch_job: aiplatform.BatchPredictionJob, instances_df: p
     output_csv = BATCH_OUTPUT_DIR + "submission.csv"
     submission_df.to_csv(output_csv, index=False)
     print(f"Submission CSV written to {output_csv} ({len(submission_df)} rows)")
+
+    # Log batch inference output metrics to Vertex AI Experiments
+    try:
+        aiplatform.log_metrics({
+            "input_rows": len(instances_df),
+            "output_rows": len(submission_df),
+            "prediction_count": len(all_predictions),
+        })
+        aiplatform.end_run()
+    except Exception as exc:
+        print(f"WARNING: Could not log batch metrics to experiment: {exc}")
+
     return submission_df
 
 

@@ -21,6 +21,7 @@ def hyperparam_search(
     """
     import itertools
     import json
+    import math
     import pandas as pd
     import warnings
     from datetime import datetime
@@ -28,6 +29,11 @@ def hyperparam_search(
     from statsmodels.tsa.statespace.sarimax import SARIMAX
 
     warnings.filterwarnings("ignore")
+
+    def _safe_metric(val, default=-1.0):
+        """Vertex AI Experiments rejects NaN / Infinity metric values."""
+        v = float(val)
+        return default if (math.isnan(v) or math.isinf(v)) else v
 
     # Initialize Vertex AI Experiments context
     aiplatform.init(
@@ -71,6 +77,9 @@ def hyperparam_search(
                 result = model.fit(disp=False, maxiter=50)
                 successful_fits += 1
 
+                aic_val = float(result.aic)
+                bic_val = float(result.bic)
+
                 # Log each trial to Vertex AI Experiments
                 ts = datetime.now().strftime("%Y%m%d%H%M%S")
                 run_id = f"grid-p{p}d{d}q{q}-P{P}D{D}Q{Q}-{ts}"
@@ -82,11 +91,12 @@ def hyperparam_search(
                         "stage": "hyperparam_search",
                     })
                     run.log_metrics({
-                        "aic": float(result.aic),
-                        "bic": float(result.bic),
+                        "aic": _safe_metric(aic_val),
+                        "bic": _safe_metric(bic_val),
                     })
 
-                if result.aic < best_aic:
+                # Only update best if AIC is a finite number
+                if math.isfinite(aic_val) and aic_val < best_aic:
                     best_aic = result.aic
                     found_order = (p, d, q)
                     found_seasonal = (P, D, Q, s)
@@ -110,7 +120,7 @@ def hyperparam_search(
             "s": s, "total_combos": total_combos, "successful_fits": successful_fits,
             "stage": "hyperparam_search_summary",
         })
-        run.log_metrics({"best_aic": float(best_aic)})
+        run.log_metrics({"best_aic": _safe_metric(best_aic)})
 
     # Write results as JSON text files (KFP artifact convention)
     with open(best_order.path, "w") as f:

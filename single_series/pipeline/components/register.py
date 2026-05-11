@@ -13,15 +13,17 @@ def register_model(
     bucket_uri: str,
     target_store_nbr: int,
     target_family: str,
+    experiment_name: str,
     model_artifact: dsl.Input[dsl.Model],
 ):
     """Register the trained model in Vertex AI Model Registry.
 
     No proportions needed — the model predicts directly for a single store×family.
+    Logs registration metadata to Vertex AI Experiments for lineage tracking.
     """
     from google.cloud import aiplatform
 
-    aiplatform.init(project=project, location=location)
+    aiplatform.init(project=project, location=location, experiment=experiment_name)
 
     print(f"Registering model from artifact URI: {model_artifact.uri}")
     model = aiplatform.Model.upload(
@@ -38,3 +40,17 @@ def register_model(
         description="Seasonal ARIMAX model for single store×family combination",
     )
     print(f"Successfully registered model! Version: {model.version_id}")
+
+    # Log model registration metadata to Vertex AI Experiments
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    with aiplatform.start_run(f"model-registration-{ts}") as run:
+        run.log_params({
+            "model_display_name": model_display_name,
+            "model_version": model.version_id,
+            "container_uri": container_uri,
+            "artifact_uri": model_artifact.uri,
+            "target_store_nbr": target_store_nbr,
+            "target_family": target_family,
+            "stage": "registration",
+        })

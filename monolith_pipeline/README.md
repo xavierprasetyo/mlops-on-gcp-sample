@@ -72,7 +72,7 @@ The final forecast CSV is written to `gs://<BUCKET>/batch_predictions/latest_for
 1. **Clone the repo and navigate to the pipeline directory:**
 
    ```bash
-   cd direct_pipeline
+   cd monolith_pipeline
    ```
 
 2. **Create a virtual environment and install dependencies:**
@@ -135,7 +135,7 @@ All parameters have defaults and can be overridden in the `kaggle_pipeline()` fu
 ## Project Structure
 
 ```
-direct_pipeline/
+monolith_pipeline/
 ├── mlops.py               # Pipeline definition, components, and submission script
 ├── batch_pipeline.yaml    # Compiled KFP pipeline spec (auto-generated)
 ├── requirements.txt       # Python dependencies for submitting the pipeline
