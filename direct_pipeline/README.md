@@ -94,7 +94,7 @@ The final forecast CSV is written to `gs://<BUCKET>/batch_predictions/latest_for
 4. **Upload your dataset to GCS** (if not already there):
 
    ```bash
-   gsutil cp train.csv oil.csv holidays_events.csv gs://your-bucket-name/sales_forecast/
+   gsutil cp -r gs://vertex-dump/sales_forecast/ gs://your-bucket-name/sales_forecast/
    ```
 
 ---
