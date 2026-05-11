@@ -3,25 +3,36 @@ from kfp import dsl
 
 @dsl.component(
     base_image="python:3.10",
-    packages_to_install=["pandas", "statsmodels"],
+    packages_to_install=["pandas", "statsmodels", "google-cloud-aiplatform"],
 )
 def hyperparam_search(
     train_data: dsl.Input[dsl.Dataset],
+    project: str,
+    location: str,
+    experiment_name: str,
     best_order: dsl.Output[dsl.Artifact],
     best_seasonal_order: dsl.Output[dsl.Artifact],
 ):
     """Grid search over SARIMAX (p,d,q)×(P,D,Q) with s=7 fixed.
 
     Uses AIC to select the best model configuration.
+    Logs each trial to Vertex AI Experiments for comparison.
     Outputs the best order and seasonal_order as JSON text files.
     """
     import itertools
     import json
     import pandas as pd
     import warnings
+    from datetime import datetime
+    from google.cloud import aiplatform
     from statsmodels.tsa.statespace.sarimax import SARIMAX
 
     warnings.filterwarnings("ignore")
+
+    # Initialize Vertex AI Experiments context
+    aiplatform.init(
+        project=project, location=location, experiment=experiment_name
+    )
 
     train_df = pd.read_csv(train_data.path)
     exog_cols = ["onpromotion", "oil_price", "is_holiday", "day_of_week"]
@@ -60,6 +71,21 @@ def hyperparam_search(
                 result = model.fit(disp=False, maxiter=50)
                 successful_fits += 1
 
+                # Log each trial to Vertex AI Experiments
+                ts = datetime.now().strftime("%Y%m%d%H%M%S")
+                run_id = f"grid-p{p}d{d}q{q}-P{P}D{D}Q{Q}-{ts}"
+                with aiplatform.start_run(run_id) as run:
+                    run.log_params({
+                        "p": p, "d": d, "q": q,
+                        "P": P, "D": D, "Q": Q, "s": s,
+                        "training_rows": len(train_df),
+                        "stage": "hyperparam_search",
+                    })
+                    run.log_metrics({
+                        "aic": float(result.aic),
+                        "bic": float(result.bic),
+                    })
+
                 if result.aic < best_aic:
                     best_aic = result.aic
                     found_order = (p, d, q)
@@ -74,6 +100,17 @@ def hyperparam_search(
 
     print(f"\nGrid search complete: {successful_fits}/{total_combos} converged")
     print(f"Best order: {found_order}, seasonal: {found_seasonal}, AIC: {best_aic:.2f}")
+
+    # Log the best result as a summary run
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    with aiplatform.start_run(f"grid-search-best-{ts}") as run:
+        run.log_params({
+            "best_p": found_order[0], "best_d": found_order[1], "best_q": found_order[2],
+            "best_P": found_seasonal[0], "best_D": found_seasonal[1], "best_Q": found_seasonal[2],
+            "s": s, "total_combos": total_combos, "successful_fits": successful_fits,
+            "stage": "hyperparam_search_summary",
+        })
+        run.log_metrics({"best_aic": float(best_aic)})
 
     # Write results as JSON text files (KFP artifact convention)
     with open(best_order.path, "w") as f:

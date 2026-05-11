@@ -14,7 +14,7 @@ import os
 import sys
 
 # Ensure repo root is on sys.path so imports work whether invoked as
-# `python new_batch_pipeline/batch_inference.py` or `python -m new_batch_pipeline.batch_inference`
+# `python aggregate_disaggregate/batch_inference.py` or `python -m aggregate_disaggregate.batch_inference`
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import google.cloud.logging
@@ -40,12 +40,13 @@ def setup_logging() -> None:
     logging.getLogger().addHandler(console)
     logger.info("Cloud Logging initialised for project %s", client.project)
 
-from new_batch_pipeline.pipeline.config import (
+from aggregate_disaggregate.pipeline.config import (
     PROJECT_ID,
     PROJECT_NUMBER,
     LOCATION,
     BUCKET_URI,
     MODEL_DISPLAY_NAME,
+    EXPERIMENT_NAME,
     GCS_TEST_CSV,
     GCS_OIL_CSV,
     GCS_HOLIDAYS_CSV,
@@ -111,7 +112,9 @@ def prepare_batch_input(
 
 def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
     """Submit a batch prediction job using the registered model."""
-    aiplatform.init(project=PROJECT_ID, location=LOCATION)
+    aiplatform.init(
+        project=PROJECT_ID, location=LOCATION, experiment=EXPERIMENT_NAME
+    )
 
     # Fetch the model and get its latest version
     models = aiplatform.Model.list(
@@ -127,6 +130,18 @@ def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
     latest = versions[-1]  # list_versions returns ascending order
     model = registry.get_model(version=latest.version_id)
     logger.info("Using model: %s, version: %s", model.display_name, model.version_id)
+
+    # Log batch inference run to Vertex AI Experiments
+    import datetime
+    run_id = f"batch-{model.version_id}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    aiplatform.start_run(run_id)
+    aiplatform.log_params({
+        "model_display_name": model.display_name,
+        "model_version": model.version_id,
+        "input_uri": input_uri,
+        "machine_type": "n2d-standard-8",
+        "stage": "batch_inference",
+    })
 
     # Submit batch prediction
     logger.info("Submitting Vertex AI Batch Prediction Job...")
@@ -146,6 +161,11 @@ def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
     logger.info("Waiting for job resource creation...")
     batch_job.wait_for_resource_creation()
     logger.info("Job created: %s", batch_job.resource_name)
+
+    aiplatform.log_params({
+        "batch_job_resource": batch_job.resource_name,
+    })
+
     return batch_job
 
 
@@ -222,6 +242,18 @@ def postprocess_output(batch_job: aiplatform.BatchPredictionJob, instances_df: p
     output_csv = BATCH_OUTPUT_DIR + "submission.csv"
     submission_df.to_csv(output_csv, index=False)
     logger.info("Submission CSV written to %s (%d rows)", output_csv, len(submission_df))
+
+    # Log batch inference output metrics to Vertex AI Experiments
+    try:
+        aiplatform.log_metrics({
+            "input_rows": len(instances_df),
+            "output_rows": len(submission_df),
+            "prediction_count": len(all_predictions),
+        })
+        aiplatform.end_run()
+    except Exception as exc:
+        logger.warning("Could not log batch metrics to experiment: %s", exc)
+
     return submission_df
 
 

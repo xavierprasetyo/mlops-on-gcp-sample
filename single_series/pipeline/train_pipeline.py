@@ -4,7 +4,7 @@ Pipeline flow:
     Preprocess (filter) → Hyperparameter Search → Train SARIMAX → Evaluate → Register
 
 Usage:
-    python -m batch_v3.pipeline.train_pipeline
+    python -m single_series.pipeline.train_pipeline
 """
 import os
 import subprocess
@@ -16,11 +16,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from kfp import dsl, compiler
 from google.cloud import aiplatform
 
-from batch_v3.pipeline.config import (
+from single_series.pipeline.config import (
     PROJECT_ID,
     LOCATION,
     BUCKET_URI,
     MODEL_DISPLAY_NAME,
+    EXPERIMENT_NAME,
     GCS_TRAIN_CSV,
     GCS_OIL_CSV,
     GCS_HOLIDAYS_CSV,
@@ -29,11 +30,11 @@ from batch_v3.pipeline.config import (
     TARGET_STORE_NBR,
     TARGET_FAMILY,
 )
-from batch_v3.pipeline.components.preprocess import preprocess
-from batch_v3.pipeline.components.hyperparam import hyperparam_search
-from batch_v3.pipeline.components.train import train_model
-from batch_v3.pipeline.components.evaluate import evaluate_model
-from batch_v3.pipeline.components.register import register_model
+from single_series.pipeline.components.preprocess import preprocess
+from single_series.pipeline.components.hyperparam import hyperparam_search
+from single_series.pipeline.components.train import train_model
+from single_series.pipeline.components.evaluate import evaluate_model
+from single_series.pipeline.components.register import register_model
 
 
 @dsl.pipeline(
@@ -95,7 +96,7 @@ def training_pipeline(
 if __name__ == "__main__":
     # 1. Build the CPR container
     cpr_image_uri = f"gcr.io/{PROJECT_ID}/cashflow-sarimax-v3-cpr:latest"
-    cpr_src_dir = "batch_v3/cpr_src"
+    cpr_src_dir = "single_series/cpr_src"
 
     print("Building CPR container via Cloud Build...")
     try:
@@ -125,5 +126,5 @@ if __name__ == "__main__":
         parameter_values={"container_uri": cpr_image_uri},
         enable_caching=False,
     )
-    job.submit()
-    print(f"Pipeline submitted! Track at: {job._dashboard_uri()}")
+    job.submit(experiment=EXPERIMENT_NAME)
+    print(f"Pipeline submitted (experiment={EXPERIMENT_NAME})! Track at: {job._dashboard_uri()}")

@@ -4,7 +4,7 @@ Pipeline flow:
     Preprocess → Hyperparameter Search → Train SARIMAX → Evaluate → Register
 
 Usage:
-    python -m new_batch_pipeline.pipeline.train_pipeline
+    python -m aggregate_disaggregate.pipeline.train_pipeline
 """
 import os
 import subprocess
@@ -16,26 +16,27 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from kfp import dsl, compiler
 from google.cloud import aiplatform
 
-from new_batch_pipeline.pipeline.config import (
+from aggregate_disaggregate.pipeline.config import (
     PROJECT_ID,
     LOCATION,
     BUCKET_URI,
     MODEL_DISPLAY_NAME,
+    EXPERIMENT_NAME,
     GCS_TRAIN_CSV,
     GCS_OIL_CSV,
     GCS_HOLIDAYS_CSV,
     PIPELINE_ROOT,
     FORECAST_HORIZON,
 )
-from new_batch_pipeline.pipeline.components.preprocess import preprocess
-from new_batch_pipeline.pipeline.components.hyperparam import hyperparam_search
-from new_batch_pipeline.pipeline.components.train import train_model
-from new_batch_pipeline.pipeline.components.evaluate import evaluate_model
-from new_batch_pipeline.pipeline.components.register import register_model
+from aggregate_disaggregate.pipeline.components.preprocess import preprocess
+from aggregate_disaggregate.pipeline.components.hyperparam import hyperparam_search
+from aggregate_disaggregate.pipeline.components.train import train_model
+from aggregate_disaggregate.pipeline.components.evaluate import evaluate_model
+from aggregate_disaggregate.pipeline.components.register import register_model
 
 
 @dsl.pipeline(
-    name="cashflow-sarimax-training",
+    name="cashflow-sarimax-aggr-disaggr",
     description="Train Seasonal ARIMAX with hyperparameter search, evaluate, and register to Vertex AI Model Registry",
 )
 def training_pipeline(
@@ -56,6 +57,9 @@ def training_pipeline(
     # Step 2: Hyperparameter search — grid search over SARIMAX orders using AIC
     search_task = hyperparam_search(
         train_data=prep_task.outputs["train_data"],
+        project=PROJECT_ID,
+        location=LOCATION,
+        experiment_name=EXPERIMENT_NAME,
     ).set_cpu_limit("4").set_memory_limit("16G")
 
     # Step 3: Train — fit SARIMAX with best hyperparameters
@@ -70,6 +74,9 @@ def training_pipeline(
         model_artifact=train_task.outputs["model_artifact"],
         val_data=prep_task.outputs["val_data"],
         forecast_horizon=forecast_horizon,
+        project=PROJECT_ID,
+        location=LOCATION,
+        experiment_name=EXPERIMENT_NAME,
     )
 
     # Step 5: Register — upload model + proportions to Vertex AI Model Registry
@@ -78,6 +85,7 @@ def training_pipeline(
         location=LOCATION,
         model_display_name=MODEL_DISPLAY_NAME,
         container_uri=container_uri,
+        experiment_name=EXPERIMENT_NAME,
         model_artifact=train_task.outputs["model_artifact"],
         proportions=prep_task.outputs["proportions"],
     )
@@ -90,7 +98,7 @@ if __name__ == "__main__":
     # 1. Build the CPR Custom Container via Cloud Build
     # ================================================================
     cpr_image_uri = f"gcr.io/{PROJECT_ID}/cashflow-sarimax-cpr:latest"
-    cpr_src_dir = "new_batch_pipeline/cpr_src"
+    cpr_src_dir = "aggregate_disaggregate/cpr_src"
 
     print("Building Custom Prediction Routine (CPR) container via Cloud Build...")
     try:
@@ -122,5 +130,5 @@ if __name__ == "__main__":
         parameter_values={"container_uri": cpr_image_uri},
         enable_caching=False,
     )
-    job.submit()
-    print(f"Pipeline submitted! Track at: {job._dashboard_uri()}")
+    job.submit(experiment=EXPERIMENT_NAME)
+    print(f"Pipeline submitted (experiment={EXPERIMENT_NAME})! Track at: {job._dashboard_uri()}")

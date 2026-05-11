@@ -8,6 +8,7 @@ LOCATION = "asia-southeast2"
 BUCKET_URI = "gs://vertex-dump"
 
 MODEL_DISPLAY_NAME = "sarimax-single"
+EXPERIMENT_NAME = "sarimax-single-series"
 
 # GCS paths to dataset files
 GCS_TRAIN_CSV = f"{BUCKET_URI}/sales_forecast/train.csv"

@@ -10,6 +10,7 @@ def register_model(
     location: str,
     model_display_name: str,
     container_uri: str,
+    experiment_name: str,
     model_artifact: dsl.Input[dsl.Model],
     proportions: dsl.Input[dsl.Dataset],
 ):
@@ -17,12 +18,14 @@ def register_model(
 
     Bundles the proportions.csv into the model artifact directory before
     uploading, so the CPR container can access it at serving time.
+    Logs registration metadata to Vertex AI Experiments for lineage tracking.
     """
     import shutil
     import os
+    from datetime import datetime
     from google.cloud import aiplatform
 
-    aiplatform.init(project=project, location=location)
+    aiplatform.init(project=project, location=location, experiment=experiment_name)
 
     # Bundle proportions.csv into the model artifact directory
     # so the CPR container can load it alongside model.pkl
@@ -40,3 +43,14 @@ def register_model(
         description="Seasonal ARIMAX Cashflow Model with CPR and proportional disaggregation",
     )
     print(f"Successfully registered model! Version: {model.version_id}")
+
+    # Log model registration metadata to Vertex AI Experiments
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    with aiplatform.start_run(f"model-registration-{ts}") as run:
+        run.log_params({
+            "model_display_name": model_display_name,
+            "model_version": model.version_id,
+            "container_uri": container_uri,
+            "artifact_uri": model_artifact.uri,
+            "stage": "registration",
+        })

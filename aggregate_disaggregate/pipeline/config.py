@@ -8,6 +8,7 @@ LOCATION = "asia-southeast2"
 BUCKET_URI = "gs://vertex-dump"
 
 MODEL_DISPLAY_NAME = "cashflow-sarimax"
+EXPERIMENT_NAME = "sarimax-cashflow-aggregate"
 
 # GCS paths to dataset files
 GCS_TRAIN_CSV = f"{BUCKET_URI}/sales_forecast/train.csv"

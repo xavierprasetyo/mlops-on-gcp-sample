@@ -21,6 +21,7 @@ PIPELINE_ROOT = f"{BUCKET_URI}/pipeline_root"
 
 # Shared logger name across all components for easy Cloud Logging filtering
 CLOUD_LOGGER_NAME = "cashflow-pipeline"
+EXPERIMENT_NAME = "sarimax-cashflow-monolith"
 
 # ==============================================================================
 # 2. KFP COMPONENTS
@@ -210,7 +211,7 @@ def tune_and_train_model(
                 "mean": float(train_df['total_cashflow'].mean()),
                 "std": float(train_df['total_cashflow'].std()),
             },
-            "exog_sample": train_df[exog_cols].head(3).to_dict(),
+            "exog_sample": train_df[exog_cols].head(3).to_dict(orient="list"),
         }, severity="INFO")
 
         logger.log_struct({
@@ -435,7 +436,7 @@ def batch_predict(
                 "max": float(output_df['predicted_cashflow'].max()),
             },
             "output_shape": list(output_df.shape),
-            "output_preview": output_df.head(3).to_dict(),
+            "output_preview": output_df.head(3).to_dict(orient="list"),
         }, severity="INFO")
 
         output_df.to_csv(batch_output_uri, index=False)
@@ -463,7 +464,7 @@ def batch_predict(
 # 3. PIPELINE DEFINITION
 # ==============================================================================
 @dsl.pipeline(
-    name="kaggle-cashflow-batch-scoring",
+    name="cashflow-monolith",
     description="Auto-tunes Seasonal ARIMAX, evaluates, and deploys batch forecasts to GCS"
 )
 def kaggle_pipeline(
@@ -560,8 +561,8 @@ if __name__ == "__main__":
         enable_caching=False, # Set to False to ensure it generates a fresh forecast on every run
     )
 
-    cloud_log({"event": "PIPELINE_SUBMITTING", "display_name": "cashflow-batch-scoring"})
-    pipeline_job.submit()
+    cloud_log({"event": "PIPELINE_SUBMITTING", "display_name": "cashflow-batch-scoring", "experiment": EXPERIMENT_NAME})
+    pipeline_job.submit(experiment=EXPERIMENT_NAME)
     dashboard_uri = pipeline_job._dashboard_uri()
-    cloud_log({"event": "PIPELINE_SUBMITTED", "dashboard_uri": dashboard_uri})
-    print(f"\nPipeline submitted successfully!\nTrack your run visually here: {dashboard_uri}")
+    cloud_log({"event": "PIPELINE_SUBMITTED", "dashboard_uri": dashboard_uri, "experiment": EXPERIMENT_NAME})
+    print(f"\nPipeline submitted successfully (experiment={EXPERIMENT_NAME})!\nTrack your run visually here: {dashboard_uri}")

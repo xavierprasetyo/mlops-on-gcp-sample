@@ -4,7 +4,7 @@ Uses gcloud/curl for model & endpoint management (much faster than the Python SD
 in some environments), and the Python SDK only for the final predict call.
 
 Usage:
-    .venv/bin/python new_batch_pipeline/deploy_and_test.py
+    .venv/bin/python aggregate_disaggregate/deploy_and_test.py
 """
 import json
 import os
@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pandas as pd
 from google.cloud import aiplatform
 
-from new_batch_pipeline.pipeline.config import (
+from aggregate_disaggregate.pipeline.config import (
     PROJECT_ID,
     LOCATION,
     BUCKET_URI,

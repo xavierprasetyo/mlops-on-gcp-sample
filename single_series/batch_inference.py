@@ -4,7 +4,7 @@ Filters test.csv to the target (store_nbr, family), enriches with exog features,
 submits batch prediction via Vertex AI SDK, and outputs id,sales CSV.
 
 Usage:
-    python batch_v3/batch_inference.py
+    python single_series/batch_inference.py
 """
 import os
 import sys
@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pandas as pd
 from google.cloud import aiplatform, storage
 
-from batch_v3.pipeline.config import (
+from single_series.pipeline.config import (
     PROJECT_ID,
     LOCATION,
     MODEL_DISPLAY_NAME,
