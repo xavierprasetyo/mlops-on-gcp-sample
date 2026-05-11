@@ -49,6 +49,10 @@ def train_model(
     os.makedirs(model_artifact.path, exist_ok=True)
     model_fit.save(os.path.join(model_artifact.path, "model.pkl"))
 
+    # Save training data for amnesia-curing in the CPR container
+    # This avoids downloading the full 120MB train.csv at serving time
+    train_df.to_csv(os.path.join(model_artifact.path, "train_history.csv"), index=False)
+
     with open(os.path.join(model_artifact.path, "params.json"), "w") as f:
         json.dump(
             {"order": list(order), "seasonal_order": list(seasonal_order),

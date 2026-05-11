@@ -84,6 +84,9 @@ def training_pipeline(
         location=LOCATION,
         model_display_name=MODEL_DISPLAY_NAME,
         container_uri=container_uri,
+        bucket_uri=BUCKET_URI,
+        target_store_nbr=target_store_nbr,
+        target_family=target_family,
         model_artifact=train_task.outputs["model_artifact"],
     )
     register_task.after(evaluate_task)

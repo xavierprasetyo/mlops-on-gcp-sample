@@ -69,15 +69,16 @@ def prepare_batch_input(
     filtered["day_of_week"] = filtered["date"].dt.dayofweek
     filtered = filtered.sort_values("date").reset_index(drop=True)
 
-    # The CPR predictor expects instances as [onpromotion, oil_price, is_holiday, day_of_week]
-    # But we also need the id for post-processing, so save the full enriched data
-    filtered["date"] = filtered["date"].dt.strftime("%Y-%m-%d")
-    instance_cols = ["id", "onpromotion", "oil_price", "is_holiday", "day_of_week"]
-    instances_df = filtered[instance_cols]
+    # Write ONLY exog columns to batch input CSV — the CPR predict() expects
+    # [onpromotion, oil_price, is_holiday, day_of_week] with no extra columns.
+    # Track IDs separately for post-processing.
+    exog_cols = ["onpromotion", "oil_price", "is_holiday", "day_of_week"]
+    batch_df = filtered[exog_cols]
+    batch_df.to_csv(output_uri, index=False)
+    print(f"Batch input written to {output_uri} ({len(batch_df)} rows)")
 
-    instances_df.to_csv(output_uri, index=False)
-    print(f"Batch input written to {output_uri} ({len(instances_df)} rows)")
-    return instances_df
+    # Return full enriched df with IDs for post-processing
+    return filtered[["id"] + exog_cols]
 
 
 def run_batch_prediction(input_uri: str) -> aiplatform.BatchPredictionJob:
@@ -132,7 +133,7 @@ def postprocess_output(batch_job: aiplatform.BatchPredictionJob, instances_df: p
     import json
     all_predictions = []
     for blob in blobs:
-        if "prediction" in blob.name and blob.name.endswith(".jsonl"):
+        if "prediction.results" in blob.name:
             content = blob.download_as_text()
             for line in content.strip().split("\n"):
                 if line:

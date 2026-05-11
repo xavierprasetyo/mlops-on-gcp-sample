@@ -1,21 +1,36 @@
 # Cashflow Batch Scoring Pipeline
 
-An end-to-end MLOps pipeline built with **Kubeflow Pipelines (KFP)** and **Vertex AI** that trains an ARIMAX time-series model on Kaggle store sales data and generates batch cashflow forecasts delivered to Google Cloud Storage.
+An end-to-end MLOps pipeline built with **Kubeflow Pipelines (KFP)** and **Vertex AI** that automatically tunes a **Seasonal ARIMAX** model on Kaggle store sales data and generates batch cashflow forecasts delivered to Google Cloud Storage.
 
 ---
 
 ## Pipeline Overview
 
-The pipeline aggregates daily store sales into a single cashflow time series, enriches it with exogenous signals (oil prices & holidays), trains a statsmodels ARIMAX model, evaluates it on a holdout set, and writes future forecasts to GCS.
+The pipeline aggregates daily store sales into a single cashflow time series, enriches it with exogenous signals (oil prices & holidays), runs **`pmdarima.auto_arima`** to find the best Seasonal ARIMAX hyperparameters `(p,d,q)(P,D,Q,s)` via AIC-minimizing stepwise search, evaluates the tuned model on a holdout set, and writes future forecasts to GCS.
 
-```mermaid
-graph LR
-    A[Preprocess & Prep Future] --> B[Train ARIMAX Model]
-    A --> C[Evaluate Model]
-    B --> C
-    B --> D[Batch Predict]
-    C --> D
-    D --> E[GCS Output]
+```
+┌─────────────────────────┐
+│ 1. Preprocess &         │
+│    Prep Future Calendar  │
+└────┬──────────┬─────────┘
+     │          │
+     ▼          │
+┌────────────────┐  │
+│ 2. Auto-Tune   │  │
+│  & Train SARIMAX│  │
+└────┬───────────┘  │
+     │          │
+     ▼          ▼
+┌─────────────────┐
+│  3. Evaluate    │
+│     Model       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 4. Batch Predict│
+│   → GCS Output  │
+└─────────────────┘
 ```
 
 ### Pipeline Steps
@@ -23,9 +38,9 @@ graph LR
 | Step | Component | Description |
 |------|-----------|-------------|
 | 1 | **Preprocess & Prep Future** | Reads `train.csv`, `oil.csv`, and `holidays_events.csv` from GCS. Aggregates sales into daily cashflow, merges exogenous features (oil price, holiday flags, promotions), splits into train/test sets, and generates a future calendar for the forecast horizon. |
-| 2 | **Train Model** | Fits an ARIMAX(7,1,1) model on the training split using `onpromotion`, `oil_price`, and `is_holiday` as exogenous variables. Serializes the fitted model as a Vertex AI Model artifact. |
-| 3 | **Evaluate Model** | Loads the saved model, forecasts over the holdout test period, and logs MAE and RMSE metrics to the Vertex AI Metrics store. |
-| 4 | **Batch Predict** | Loads the trained model, forecasts the true future using the prepared calendar, clamps predictions to non-negative values, and writes the results as a CSV to the configured GCS output path. |
+| 2 | **Tune & Train Model** | Runs `pmdarima.auto_arima` with stepwise search over `(p,d,q)(P,D,Q,s)` orders (AIC criterion, `m=7` weekly seasonality). Logs best hyperparameters, AIC, and BIC as Vertex Metrics. Saves the tuned model via `joblib`. |
+| 3 | **Evaluate Model** | Loads the tuned model, forecasts over the holdout test period, and logs MAE and RMSE metrics to the Vertex AI Metrics store. |
+| 4 | **Batch Predict** | Loads the tuned model, forecasts the true future using the prepared calendar, clamps predictions to non-negative values, and writes the results as a CSV to the configured GCS output path. |
 
 ### Output
 
@@ -113,6 +128,7 @@ All parameters have defaults and can be overridden in the `kaggle_pipeline()` fu
 | `holidays_uri` | `gs://<BUCKET>/sales_forecast/holidays_events.csv` | GCS path to holidays data |
 | `batch_output_uri` | `gs://<BUCKET>/batch_predictions/latest_forecast.csv` | GCS destination for forecast output |
 | `forecast_horizon` | `15` | Number of days to forecast |
+| `seasonal_period` | `7` | Seasonal period for SARIMAX (`m`); 7 = weekly seasonality |
 
 ---
 

@@ -1,4 +1,6 @@
 google-cloud-aiplatform>=1.38.0
+google-cloud-logging>=3.5.0
 kfp>=2.7.0
 pandas
 numpy
+pmdarima
