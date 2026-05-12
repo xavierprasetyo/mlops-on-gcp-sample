@@ -28,7 +28,7 @@ EXPERIMENT_NAME = "sarimax-cashflow-monolith"
 # ==============================================================================
 
 @dsl.component(
-    base_image="python:3.10",
+    base_image="python:3.13",
     packages_to_install=["pandas", "fsspec", "gcsfs", "google-cloud-logging"]
 )
 def preprocess_and_prep_future(
@@ -170,7 +170,7 @@ def preprocess_and_prep_future(
 
 
 @dsl.component(
-    base_image="python:3.10",
+    base_image="python:3.13",
     packages_to_install=["pandas", "pmdarima", "joblib", "fsspec", "gcsfs", "google-cloud-logging"]
 )
 def tune_and_train_model(
@@ -280,7 +280,7 @@ def tune_and_train_model(
 
 
 @dsl.component(
-    base_image="python:3.10",
+    base_image="python:3.13",
     packages_to_install=["pandas", "pmdarima", "joblib", "scikit-learn", "fsspec", "gcsfs", "google-cloud-logging"]
 )
 def evaluate_model(
@@ -371,7 +371,7 @@ def evaluate_model(
 
 
 @dsl.component(
-    base_image="python:3.10",
+    base_image="python:3.13",
     packages_to_install=["pandas", "pmdarima", "joblib", "fsspec", "gcsfs", "google-cloud-logging"]
 )
 def batch_predict(

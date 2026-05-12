@@ -2,7 +2,7 @@ from kfp import dsl
 
 
 @dsl.component(
-    base_image="python:3.10",
+    base_image="python:3.13",
     packages_to_install=["pandas", "statsmodels", "google-cloud-aiplatform"],
 )
 def hyperparam_search(

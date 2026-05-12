@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MLOps on GCP — SARIMAX Sales Forecasting with Vertex AI Pipelines">
+  <title>MLOps on GCP — SARIMAX Sales Forecasting</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <a href="#" class="brand">MLOps on GCP</a>
+    <a href="#tech-stack">Tech Stack</a>
+    <a href="#structure">Structure</a>
+    <a href="#dataset">Dataset</a>
+    <a href="#quick-start">Quick Start</a>
+    <a href="#comparison">Comparison</a>
+    <a href="#qwiklabs">Qwiklabs</a>
+  </div>
+</nav>
+
+<div class="container">
+
+<!-- ═══ Hero ═══ -->
+<section class="hero">
+  <h1>MLOps on GCP — SARIMAX Sales Forecasting</h1>
+  <p>A collection of <strong>Vertex AI MLOps pipelines</strong> that forecast store sales using <strong>Seasonal ARIMAX</strong> models. The repo explores three progressively more production-ready approaches — from a single-file prototype to a fully containerised batch-prediction system — all built on the same <a href="https://www.kaggle.com/competitions/store-sales-time-series-forecasting">Kaggle Store Sales</a> dataset.</p>
+</section>
+
+<!-- ═══ Tech Stack ═══ -->
+<section id="tech-stack">
+  <h2><span class="icon">⚙️</span> Tech Stack</h2>
+  <div class="badge-grid">
+    <div class="badge"><span class="label">Orchestration</span><span class="value"><a href="https://www.kubeflow.org/docs/components/pipelines/">KFP v2</a> on Vertex AI Pipelines</span></div>
+    <div class="badge"><span class="label">Training</span><span class="value">pmdarima · statsmodels SARIMAX</span></div>
+    <div class="badge"><span class="label">Serving</span><span class="value">Vertex AI Batch Prediction · CPR via FastAPI</span></div>
+    <div class="badge"><span class="label">Model Registry</span><span class="value">Vertex AI Model Registry</span></div>
+    <div class="badge"><span class="label">Container Build</span><span class="value">Cloud Build · Artifact Registry</span></div>
+    <div class="badge"><span class="label">Infrastructure</span><span class="value">GCS · BigQuery (qwiklabs only)</span></div>
+    <div class="badge"><span class="label">Language</span><span class="value">Python 3.10+</span></div>
+  </div>
+</section>
+
+<!-- ═══ Repository Structure ═══ -->
+<section id="structure">
+  <h2><span class="icon">📁</span> Repository Structure</h2>
+  <div class="repo-tree">
+    <span class="dir">vertex-mlops/</span><br>
+    ├── <span class="dir">monolith_pipeline/</span> <span class="comment"># Approach 1 — single-file KFP pipeline (prototype)</span><br>
+    ├── <span class="dir">aggregate_disaggregate/</span> <span class="comment"># Approach 2 — 2-stage pipeline with proportional disaggregation</span><br>
+    ├── <span class="dir">single_series/</span> <span class="comment"># Approach 3 — dedicated model per store×family</span><br>
+    ├── <span class="dir">qwiklabs_pipeline/</span> <span class="comment"># Qwiklabs lab: custom container training + batch predict</span><br>
+    ├── <span class="dir">dataset/</span> <span class="comment"># Kaggle Store Sales data (gitignored)</span><br>
+    ├── <span class="file">setup_gcs_bucket.sh</span> <span class="comment"># One-time GCS bucket + IAM setup</span><br>
+    └── <span class="file">README.md</span>
+  </div>
+  <p style="color:var(--text-secondary);font-size:0.92rem;">Each pipeline directory has its own <code>README.md</code> with setup &amp; run instructions.</p>
+</section>
+
+<!-- ═══ Dataset ═══ -->
+<section id="dataset">
+  <h2><span class="icon">📊</span> Dataset</h2>
+  <p style="color:var(--text-secondary);margin-bottom:1rem;">All SARIMAX pipelines use the <a href="https://www.kaggle.com/competitions/store-sales-time-series-forecasting" style="color:var(--accent);text-decoration:none;">Kaggle Store Sales — Time Series Forecasting</a> dataset.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>File</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>train.csv</code></td><td>Daily sales per store × product family (~122 MB)</td></tr>
+      <tr><td><code>test.csv</code></td><td>15-day forecast horizon</td></tr>
+      <tr><td><code>oil.csv</code></td><td>Daily oil prices (exogenous feature)</td></tr>
+      <tr><td><code>holidays_events.csv</code></td><td>Ecuador holiday calendar (exogenous feature)</td></tr>
+      <tr><td><code>stores.csv</code></td><td>Store metadata</td></tr>
+      <tr><td><code>transactions.csv</code></td><td>Daily transaction counts</td></tr>
+      <tr><td><code>sample_submission.csv</code></td><td>Submission template (<code>id, sales</code>)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout note"><strong>Note:</strong> The <code>dataset/</code> directory is gitignored. Download the data from Kaggle or copy from <code>gs://vertex-dump/sales_forecast/</code>.</div>
+</section>
+
+<!-- ═══ Quick Start ═══ -->
+<section id="quick-start">
+  <h2><span class="icon">🚀</span> Quick Start</h2>
+  <pre><span class="comment"># 1. Clone the repo</span>
+<span class="cmd">git clone</span> git@github.com:xavierprasetyo/mlops-on-gcp-sample.git
+<span class="cmd">cd</span> mlops-on-gcp-sample
+
+<span class="comment"># 2. Create a virtual environment</span>
+<span class="cmd">python -m venv</span> .venv && <span class="cmd">source</span> .venv/bin/activate
+
+<span class="comment"># 3. Authenticate with GCP</span>
+<span class="cmd">gcloud auth login</span>
+<span class="cmd">gcloud config set project</span> <span class="placeholder">&lt;YOUR_PROJECT_ID&gt;</span>
+
+<span class="comment"># 4. (SARIMAX pipelines only) Provision GCS bucket &amp; IAM roles</span>
+<span class="cmd">./setup_gcs_bucket.sh</span> --project <span class="placeholder">&lt;YOUR_PROJECT_ID&gt;</span> --bucket <span class="placeholder">&lt;BUCKET_NAME&gt;</span>
+
+<span class="comment"># 5. Pick an approach and follow its README</span>
+<span class="cmd">cd</span> monolith_pipeline
+<span class="cmd">pip install</span> -r requirements.txt
+<span class="cmd">python</span> mlops.py</pre>
+  <div class="callout important"><strong>Important:</strong> The three SARIMAX pipelines (<code>monolith_pipeline</code>, <code>aggregate_disaggregate</code>, <code>single_series</code>) require the GCS bucket and IAM permissions created by <code>setup_gcs_bucket.sh</code>. Run it <strong>once</strong> before executing any of these pipelines. The <code>qwiklabs_pipeline</code> manages its own infrastructure.</div>
+</section>
+
+<!-- ═══ Pipeline Comparison ═══ -->
+<section id="comparison">
+  <h2><span class="icon">🔍</span> Pipeline Comparison</h2>
+
+  <h3>High-Level Summary</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Dimension</th><th><code>monolith_pipeline</code></th><th><code>aggregate_disaggregate</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Philosophy</strong></td><td>All-in-one monolithic KFP pipeline</td><td>Modular 2-stage pipeline with CPR serving</td><td>Simplified single-case pipeline with CPR serving</td></tr>
+      <tr><td><strong>Modeling Strategy</strong></td><td>Aggregated daily cashflow (all stores)</td><td>Aggregated daily cashflow → disaggregate via proportions</td><td>Single (store, family) time series</td></tr>
+      <tr><td><strong>Hyperparameter Tuning</strong></td><td><code>pmdarima.auto_arima</code> (stepwise)</td><td>Manual grid search over SARIMAX orders (AIC)</td><td>Manual grid search over SARIMAX orders (AIC)</td></tr>
+      <tr><td><strong>Training Library</strong></td><td><code>pmdarima</code></td><td><code>statsmodels</code> (SARIMAX)</td><td><code>statsmodels</code> (SARIMAX)</td></tr>
+      <tr><td><strong>Inference Method</strong></td><td>KFP component writes CSV to GCS</td><td>Vertex AI Batch Prediction via CPR</td><td>Vertex AI Batch Prediction via CPR</td></tr>
+      <tr><td><strong>Model Registry</strong></td><td><span class="no">❌</span> Not registered</td><td><span class="yes">✅</span> Registered in Vertex AI</td><td><span class="yes">✅</span> Registered in Vertex AI</td></tr>
+      <tr><td><strong>Online Endpoint</strong></td><td><span class="no">❌</span> None</td><td><span class="no">❌</span> None (batch only)</td><td><span class="no">❌</span> None</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Architecture Comparison</h3>
+  <div class="arch-grid">
+    <div class="arch-card">
+      <h4>monolith_pipeline</h4>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">Monolithic KFP Pipeline</p>
+      <pre>Preprocess & Prep Future
+  ├─→ Auto-Tune & Train
+  │     ├─→ Evaluate
+  │     └─→ Batch Predict → GCS
+  └─ (future cal) ─→ Predict</pre>
+      <ul>
+        <li><strong>Single file</strong> (<code>mlops.py</code>) — all 4 components + pipeline + submission</li>
+        <li>Batch prediction runs <strong>inside</strong> the pipeline</li>
+        <li>Output: forecast CSV</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>aggregate_disaggregate</h4>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">2-Stage with Disaggregation</p>
+      <pre>Stage 1 (KFP):
+  Build CPR → Preprocess
+    → Grid Search → Train
+      → Evaluate → Register
+
+Stage 2 (SDK):
+  Prep batch → Submit Job
+    → Post-process JSONL</pre>
+      <ul>
+        <li>Training &amp; inference <strong>decoupled</strong></li>
+        <li>CPR container with preprocess→predict→postprocess</li>
+        <li>Proportions table bundled with model</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>single_series</h4>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">Single-Case Pipeline</p>
+      <pre>Stage 1 (KFP):
+  Build CPR → Preprocess
+    → Grid Search → Train
+      → Evaluate → Register
+
+Stage 2 (SDK):
+  Filter test → Submit Job
+    → Post-process JSONL</pre>
+      <ul>
+        <li><strong>Dedicated model</strong> for one (store, family)</li>
+        <li>No aggregation or disaggregation</li>
+        <li>Simplest CPR (~100 lines)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Detailed Feature Comparison</h3>
+
+  <h4>1. Data Preprocessing</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Feature</th><th><code>monolith</code></th><th><code>agg_disagg</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Granularity</strong></td><td>Aggregated (all stores → 1 series)</td><td>Aggregated (all stores → 1 series)</td><td>Filtered (single store×family)</td></tr>
+      <tr><td><strong>Target</strong></td><td><code>total_cashflow</code></td><td><code>total_cashflow</code></td><td><code>sales</code></td></tr>
+      <tr><td><strong>Exogenous</strong></td><td>onpromotion, oil_price, is_holiday</td><td>+ day_of_week</td><td>+ day_of_week</td></tr>
+      <tr><td><strong>Proportions</strong></td><td><span class="no">❌</span></td><td><span class="yes">✅</span> Last 30 days</td><td><span class="no">❌</span></td></tr>
+      <tr><td><strong>Future calendar</strong></td><td><span class="yes">✅</span> In preprocess</td><td><span class="no">❌</span> Batch inference</td><td><span class="no">❌</span> Batch inference</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>2. Hyperparameter Tuning</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Feature</th><th><code>monolith</code></th><th><code>agg_disagg</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Method</strong></td><td><code>auto_arima</code> (stepwise)</td><td>Manual grid search</td><td>Manual grid search</td></tr>
+      <tr><td><strong>Search space</strong></td><td>Automated (max p=7, q=3, P=2, Q=2)</td><td>144 combos (p,d,q × P,D,Q)</td><td>Same grid</td></tr>
+      <tr><td><strong>Criterion</strong></td><td>AIC</td><td>AIC</td><td>AIC</td></tr>
+      <tr><td><strong>Seasonal period</strong></td><td>m=7 (weekly)</td><td>s=7 (weekly)</td><td>s=7 (weekly)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>3. Model Training</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Feature</th><th><code>monolith</code></th><th><code>agg_disagg</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Library</strong></td><td><code>pmdarima</code></td><td><code>statsmodels</code> SARIMAX</td><td><code>statsmodels</code> SARIMAX</td></tr>
+      <tr><td><strong>Serialization</strong></td><td><code>joblib</code></td><td><code>pickle</code></td><td><code>pickle</code></td></tr>
+      <tr><td><strong>Model artifact</strong></td><td>KFP Model (not registered)</td><td>KFP → Vertex AI Registry</td><td>KFP → Vertex AI Registry</td></tr>
+      <tr><td><strong>Amnesia cure</strong></td><td>N/A</td><td>Re-applies full history</td><td>Re-applies filtered history</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>4. Model Evaluation</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Feature</th><th><code>monolith</code></th><th><code>agg_disagg</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Metrics</strong></td><td>MAE, RMSE</td><td>MAE, RMSE, MAPE</td><td>MAE, RMSE, MAPE</td></tr>
+      <tr><td><strong>Logging</strong></td><td>Vertex AI Metrics (KFP)</td><td>Vertex AI Metrics (KFP)</td><td>Vertex AI Metrics (KFP)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>5. Inference / Serving</h4>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Feature</th><th><code>monolith</code></th><th><code>agg_disagg</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Method</strong></td><td>In-pipeline KFP component</td><td>Vertex AI Batch Prediction (CPR)</td><td>Vertex AI Batch Prediction (CPR)</td></tr>
+      <tr><td><strong>Container</strong></td><td>None (KFP component)</td><td>Docker (FastAPI + uvicorn)</td><td>Docker (FastAPI + uvicorn)</td></tr>
+      <tr><td><strong>Input format</strong></td><td>KFP artifact (CSV)</td><td>CSV → GCS → Vertex AI</td><td>CSV → GCS → Vertex AI</td></tr>
+      <tr><td><strong>Output format</strong></td><td>CSV</td><td>JSONL → id,sales CSV</td><td>JSONL → id,sales CSV</td></tr>
+      <tr><td><strong>Disaggregation</strong></td><td><span class="no">❌</span> Aggregated only</td><td><span class="yes">✅</span> Proportional</td><td><span class="no">❌</span> Direct</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Project Structure</h3>
+
+  <h4>monolith_pipeline/ — 5 files</h4>
+  <div class="repo-tree">
+    <span class="dir">monolith_pipeline/</span><br>
+    ├── <span class="file">mlops.py</span> <span class="comment"># Everything: components + pipeline + submission</span><br>
+    ├── <span class="file">batch_pipeline.yaml</span> <span class="comment"># Compiled KFP spec</span><br>
+    ├── <span class="file">requirements.txt</span><br>
+    └── <span class="file">README.md</span>
+  </div>
+
+  <h4>aggregate_disaggregate/ — 13+ files</h4>
+  <div class="repo-tree">
+    <span class="dir">aggregate_disaggregate/</span><br>
+    ├── <span class="dir">pipeline/</span><br>
+    │&nbsp;&nbsp; ├── <span class="file">config.py</span> <span class="comment"># Centralized config</span><br>
+    │&nbsp;&nbsp; ├── <span class="file">train_pipeline.py</span> <span class="comment"># Stage 1: KFP pipeline</span><br>
+    │&nbsp;&nbsp; └── <span class="dir">components/</span> <span class="comment"># preprocess, hyperparam, train, evaluate, register</span><br>
+    ├── <span class="dir">cpr_src/</span> <span class="comment"># Dockerfile, main.py, predictor.py</span><br>
+    ├── <span class="file">batch_inference.py</span> <span class="comment"># Stage 2: Batch predict + post-process</span><br>
+    ├── <span class="dir">tests/</span><br>
+    └── <span class="file">requirements.txt</span>
+  </div>
+
+  <h4>single_series/ — 12+ files</h4>
+  <div class="repo-tree">
+    <span class="dir">single_series/</span><br>
+    ├── <span class="dir">pipeline/</span><br>
+    │&nbsp;&nbsp; ├── <span class="file">config.py</span> <span class="comment"># Config (TARGET_STORE_NBR, TARGET_FAMILY)</span><br>
+    │&nbsp;&nbsp; ├── <span class="file">train_pipeline.py</span> <span class="comment"># Stage 1: KFP pipeline</span><br>
+    │&nbsp;&nbsp; └── <span class="dir">components/</span> <span class="comment"># preprocess, hyperparam, train, evaluate, register</span><br>
+    ├── <span class="dir">cpr_src/</span> <span class="comment"># Dockerfile, main.py, predictor.py</span><br>
+    ├── <span class="file">batch_inference.py</span> <span class="comment"># Stage 2: Batch predict + post-process</span><br>
+    └── <span class="dir">tests/</span>
+  </div>
+
+  <h3>CPR Predictor Complexity</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Aspect</th><th><code>aggregate_disaggregate</code></th><th><code>single_series</code></th></tr></thead>
+    <tbody>
+      <tr><td><strong>Lines of code</strong></td><td>~209</td><td>~100</td></tr>
+      <tr><td><strong>Artifacts loaded</strong></td><td><code>model.pkl</code> + <code>proportions.csv</code></td><td><code>model.pkl</code> only</td></tr>
+      <tr><td><strong>GCS download</strong></td><td><code>google.cloud.storage</code> SDK</td><td><code>fsspec</code></td></tr>
+      <tr><td><strong>Predict output</strong></td><td>Full row dicts (id, date, store, family, proportion, sales)</td><td>Plain numeric list</td></tr>
+      <tr><td><strong>Disaggregation</strong></td><td><span class="yes">✅</span> daily total × proportion</td><td><span class="no">❌</span> Direct values</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Trade-offs</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Approach</th><th>Pros</th><th>Cons</th></tr></thead>
+    <tbody>
+      <tr><td><strong><code>monolith</code></strong></td><td>Simplest to set up; single file; no containers; good for prototyping</td><td>No model registry; no serving infra; aggregated only; tightly coupled</td></tr>
+      <tr><td><strong><code>agg_disagg</code></strong></td><td>Production-ready; disaggregates to store×family; batch prediction; model versioning</td><td>Complex architecture; CPR must cure amnesia; proportional approximation error</td></tr>
+      <tr><td><strong><code>single_series</code></strong></td><td>Direct prediction; simplest CPR; most accurate for target combo; clean separation</td><td>One combo only; needs N pipelines for N combos; not scalable to 1,782 pairs</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>When to Use Each</h3>
+  <div class="arch-grid">
+    <div class="arch-card">
+      <h4>monolith_pipeline</h4>
+      <p style="color:var(--text-secondary);font-size:0.88rem;">Rapid prototyping, quick experiments, or when you only need an aggregated daily cashflow forecast and don't need serving infrastructure.</p>
+    </div>
+    <div class="arch-card">
+      <h4>aggregate_disaggregate</h4>
+      <p style="color:var(--text-secondary);font-size:0.88rem;">Production workloads where you need per-store, per-family predictions across all combinations, with model versioning.</p>
+    </div>
+    <div class="arch-card">
+      <h4>single_series</h4>
+      <p style="color:var(--text-secondary);font-size:0.88rem;">When you care about accuracy for a <strong>specific</strong> store×family combination and want the simplest possible serving setup.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ Qwiklabs ═══ -->
+<section id="qwiklabs">
+  <h2><span class="icon">🎓</span> Qwiklabs Pipeline</h2>
+  <div class="card">
+    <p style="color:var(--text-secondary);margin-bottom:0.8rem;">The <code>qwiklabs_pipeline/</code> directory contains a separate lab exercise adapted from the <a href="https://www.cloudskillsboost.google/" style="color:var(--accent);text-decoration:none;">Vertex AI Pipelines Qwiklabs course</a>. It demonstrates:</p>
+    <ul>
+      <li>Creating a <strong>managed Tabular Dataset</strong> from BigQuery</li>
+      <li>Running a <strong>custom container training job</strong> (Scikit-learn <code>DecisionTreeClassifier</code> on the UCI Dry Beans dataset)</li>
+      <li>Executing a <strong>batch prediction</strong> job — all orchestrated via KFP v2</li>
+    </ul>
+    <p style="color:var(--text-muted);font-size:0.88rem;margin-top:0.8rem;">This pipeline is independent of the SARIMAX forecasting pipelines and serves as a learning reference.</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>This project is for educational and experimental purposes.</p>
+</footer>
+
+</body>
+</html>

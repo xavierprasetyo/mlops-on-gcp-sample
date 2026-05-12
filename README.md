@@ -27,6 +27,7 @@ vertex-mlops/
 ├── single_series/             # Approach 3 — dedicated model per store×family
 ├── qwiklabs_pipeline/         # Qwiklabs lab: custom container training + batch predict (Scikit-learn)
 ├── dataset/                   # Kaggle Store Sales data (gitignored — download separately)
+├── setup_gcs_bucket.sh        # One-time GCS bucket + IAM setup for the 3 SARIMAX pipelines
 └── README.md                  # This file
 ```
 
@@ -66,12 +67,20 @@ python -m venv .venv && source .venv/bin/activate
 gcloud auth login
 gcloud config set project <YOUR_PROJECT_ID>
 
-# 4. Pick an approach and follow its README
+# 4. (SARIMAX pipelines only) Provision the GCS bucket & IAM roles
+#    This is REQUIRED before running monolith_pipeline, aggregate_disaggregate, or single_series.
+#    The qwiklabs_pipeline does NOT need this step.
+./setup_gcs_bucket.sh --project <YOUR_PROJECT_ID> --bucket <BUCKET_NAME>
+
+# 5. Pick an approach and follow its README
 #    e.g. for the monolith pipeline:
 cd monolith_pipeline
 pip install -r requirements.txt
 python mlops.py
 ```
+
+> [!IMPORTANT]
+> The three SARIMAX pipelines (`monolith_pipeline`, `aggregate_disaggregate`, `single_series`) require the GCS bucket and IAM permissions created by `setup_gcs_bucket.sh`. Run it **once** before executing any of these pipelines. The `qwiklabs_pipeline` manages its own infrastructure and does not need this step.
 
 ---
 
@@ -89,7 +98,7 @@ A side-by-side comparison of the three model-building approaches in this reposit
 | **Training Library** | `pmdarima` | `statsmodels` (SARIMAX) | `statsmodels` (SARIMAX) |
 | **Inference Method** | KFP component writes CSV to GCS | Vertex AI Batch Prediction via Custom Prediction Routine (CPR) | Vertex AI Batch Prediction via CPR |
 | **Model Registry** | ❌ Not registered | ✅ Registered in Vertex AI Model Registry | ✅ Registered in Vertex AI Model Registry |
-| **Online Endpoint** | ❌ None | ✅ Supported (deploy_and_test.py) | ❌ None |
+| **Online Endpoint** | ❌ None | ❌ None (batch prediction only) | ❌ None |
 
 ---
 
@@ -201,7 +210,7 @@ Stage 2 (SDK Script):
 | **Batch input format** | KFP artifact (CSV) | CSV uploaded to GCS → Vertex AI CSV format | CSV uploaded to GCS → Vertex AI CSV format |
 | **Batch output format** | CSV (date, predicted_cashflow) | JSONL → post-processed to `id, sales` CSV | JSONL → post-processed to `id, sales` CSV |
 | **Disaggregation** | ❌ Outputs only aggregated total | ✅ Proportional disaggregation (store×family) | ❌ Direct prediction (no disaggregation needed) |
-| **Online endpoint** | ❌ | ✅ Via `deploy_and_test.py` | ❌ |
+| **Online endpoint** | ❌ | ❌ | ❌ |
 | **Input columns** | `onpromotion`, `oil_price`, `is_holiday` | `id`, `date`, `store_nbr`, `family`, `onpromotion`, `oil_price`, `is_holiday`, `day_of_week` | `id`, `onpromotion`, `oil_price`, `is_holiday`, `day_of_week` |
 
 ---
@@ -218,7 +227,7 @@ monolith_pipeline/
 └── README.md
 ```
 
-#### `aggregate_disaggregate/` — 14+ files
+#### `aggregate_disaggregate/` — 13+ files
 
 ```
 aggregate_disaggregate/
@@ -237,7 +246,6 @@ aggregate_disaggregate/
 │   ├── main.py                    # FastAPI routes (/predict, /health)
 │   └── predictor.py               # CPR lifecycle (load, preprocess, predict, postprocess)
 ├── batch_inference.py             # Stage 2: Batch predict + post-process
-├── deploy_and_test.py             # Build, deploy, and test online endpoint
 ├── tests/
 └── requirements.txt
 ```
@@ -283,7 +291,7 @@ single_series/
 | Approach | Pros | Cons |
 |---|---|---|
 | **`monolith_pipeline`** | Simplest to set up; single file; no containers needed; good for prototyping | No model registry; no serving infrastructure; output is aggregated only; tightly coupled |
-| **`aggregate_disaggregate`** | Production-ready; disaggregates to store×family; supports online + batch; model versioning | Complex architecture; CPR must cure model amnesia; proportional disaggregation introduces approximation error; large predictor codebase |
+| **`aggregate_disaggregate`** | Production-ready; disaggregates to store×family; batch prediction; model versioning | Complex architecture; CPR must cure model amnesia; proportional disaggregation introduces approximation error; large predictor codebase |
 | **`single_series`** | Direct prediction per store×family; simplest CPR; most accurate for the target combo; clean separation | Only predicts one store×family combo; would need N pipelines for N combos; not scalable to all 1,782 store×family pairs |
 
 ---
