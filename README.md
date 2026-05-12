@@ -98,7 +98,7 @@ A side-by-side comparison of the three model-building approaches in this reposit
 | **Training Library** | `pmdarima` | `statsmodels` (SARIMAX) | `statsmodels` (SARIMAX) |
 | **Inference Method** | KFP component writes CSV to GCS | Vertex AI Batch Prediction via Custom Prediction Routine (CPR) | Vertex AI Batch Prediction via CPR |
 | **Model Registry** | ❌ Not registered | ✅ Registered in Vertex AI Model Registry | ✅ Registered in Vertex AI Model Registry |
-| **Online Endpoint** | ❌ None | ❌ None (batch prediction only) | ❌ None |
+| **Online Endpoint** | ❌ None | ❌ None | ❌ None |
 
 ---
 
